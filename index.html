@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payroll Dashboard — Lunamo Café</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- REPLACED html2pdf WITH NATIVE jsPDF LIBRARIES -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #eef2f7; min-height: 100vh; margin: 0; }
+        
+        .upload-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s; }
+        .upload-zone:hover { border-color: #6366f1; background: #eef2ff; }
+        
+        .ctrl-input { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600; font-size: 13px; outline: none; }
+        .ctrl-input:focus { border-color: #6366f1; background: #fff; }
+        .ctrl-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+        
+        .preview-scroll { overflow-x: auto; background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .pdf-canvas { width: 800px; background: white; padding: 50px; margin: 0 auto; border: 1px solid #eee; }
+    </style>
+</head>
+<body class="p-6 md:p-10">
+
+<div class="max-w-[1400px] mx-auto">
+    <!-- Header -->
+    <div class="bg-slate-800 text-white rounded-2xl px-8 py-6 mb-8 flex justify-between items-center shadow-lg">
+        <div>
+            <h1 id="dashCoName" class="text-xl font-bold">Lunamo Café Private Limited</h1>
+            <p class="text-slate-400 text-sm mt-1">Payroll Dashboard</p>
+        </div>
+        <button onclick="downloadTemplate()" class="bg-slate-700 hover:bg-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-colors">
+            📥 Download Excel Template
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
+        
+        <!-- Controls Column -->
+        <div class="xl:col-span-4 space-y-6">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+                <h3 class="font-bold text-slate-800 text-sm mb-2 uppercase tracking-wide">1. Company Details</h3>
+                <div>
+                    <label class="ctrl-label">Company Name</label>
+                    <input type="text" id="coName" value="Lunamo Café Private Limited" oninput="updateUI()" class="ctrl-input">
+                </div>
+                <div>
+                    <label class="ctrl-label">Address Line</label>
+                    <input type="text" id="coAddr" value="32D, Sarat Bose Road, AJC Bose Road, Kolkata 700020 India" oninput="updateUI()" class="ctrl-input">
+                </div>
+                <div>
+                    <label class="ctrl-label">Company Logo</label>
+                    <div class="upload-zone" onclick="document.getElementById('logoInput').click()">
+                        <input type="file" id="logoInput" accept="image/*" onchange="loadLogo(event)" style="display:none">
+                        <img id="logoThumb" src="" style="max-height:40px; margin:auto; display:none;">
+                        <p id="logoText" class="text-xs font-semibold text-slate-400 mt-2">Click to upload logo</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+                <h3 class="font-bold text-slate-800 text-sm mb-2 uppercase tracking-wide">2. Pay Period</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="ctrl-label">Month</label>
+                        <select id="selM" onchange="updateUI()" class="ctrl-input">
+                            <option>January</option><option>February</option><option>March</option>
+                            <option selected>April</option><option>May</option><option>June</option>
+                            <option>July</option><option>August</option><option>September</option>
+                            <option>October</option><option>November</option><option>December</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="ctrl-label">Year</label>
+                        <select id="selY" onchange="updateUI()" class="ctrl-input"></select>
+                    </div>
+                </div>
+                <div>
+                    <label class="ctrl-label">Pay Date (Optional)</label>
+                    <input type="date" id="pDate" onchange="updateUI()" class="ctrl-input">
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+                <h3 class="font-bold text-slate-800 text-sm mb-2 uppercase tracking-wide">3. Staff Data</h3>
+                <div class="upload-zone border-indigo-200 bg-indigo-50" onclick="document.getElementById('exUp').click()">
+                    <input type="file" id="exUp" accept=".xlsx,.xls" onchange="loadData(event)" style="display:none">
+                    <p id="xlLabel" class="text-sm font-bold text-indigo-600">📄 Upload Staff Excel</p>
+                    <p id="empCount" class="text-xs text-indigo-400 mt-1">Supports up to 100 employees</p>
+                </div>
+            </div>
+
+            <button onclick="processAll()" id="mainBtn" class="w-full bg-emerald-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 active:scale-95 transition-all">
+                ⚡ Generate Native PDF Zip
+            </button>
+
+            <!-- Progress -->
+            <div id="progressBox" class="hidden bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2">
+                    <div id="pBar" class="bg-emerald-500 h-full w-0 transition-all duration-200"></div>
+                </div>
+                <p id="pText" class="text-[10px] font-bold text-slate-500 uppercase text-center tracking-wider"></p>
+            </div>
+        </div>
+
+        <!-- Preview Column -->
+        <div class="xl:col-span-8">
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="ctrl-label m-0">Live A4 Preview (Visual Only)</span>
+                    <div id="previewNav" class="hidden flex gap-3 items-center">
+                        <button onclick="prevEmp()" class="text-xs bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg font-bold text-slate-600">← Previous</button>
+                        <span id="previewIdx" class="text-xs font-bold text-slate-400"></span>
+                        <button onclick="nextEmp()" class="text-xs bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg font-bold text-slate-600">Next →</button>
+                    </div>
+                </div>
+                
+                <div class="preview-scroll">
+                    <div id="previewArea" class="flex items-center justify-center min-h-[500px]">
+                        <p class="text-slate-300 font-medium italic">Upload staff list to view preview</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Init Year Dropdown
+const ys = document.getElementById('selY'), cy = new Date().getFullYear();
+for(let i = 2024; i <= 2030; i++){ 
+    const o = document.createElement('option'); o.value = i; o.text = i; 
+    if(i === cy) o.selected = true; ys.appendChild(o); 
+}
+
+let rows = [], logoBase64 = '', currentPreviewIdx = 0;
+
+function loadLogo(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+        logoBase64 = evt.target.result;
+        const img = document.getElementById('logoThumb');
+        img.src = logoBase64; img.style.display = 'block';
+        document.getElementById('logoText').textContent = 'Logo Uploaded ✓';
+        updateUI();
+    };
+    reader.readAsDataURL(file);
+}
+
+function loadData(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+        const wb = XLSX.read(new Uint8Array(evt.target.result), {type:'array'});
+        rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        document.getElementById('xlLabel').textContent = "✓ " + file.name;
+        document.getElementById('empCount').textContent = `${rows.length} employees found`;
+        document.getElementById('previewNav').classList.remove('hidden');
+        currentPreviewIdx = 0;
+        updateUI();
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function prevEmp() { if(currentPreviewIdx > 0) { currentPreviewIdx--; updateUI(); } }
+function nextEmp() { if(currentPreviewIdx < rows.length - 1) { currentPreviewIdx++; updateUI(); } }
+
+function formatINR(num) {
+    return Number(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function numToWords(n) {
+    const a = ['','One ','Two ','Three ','Four ','Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
+    const b = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+    let num = ('000000000'+Math.floor(n)).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+    if (!num) return ''; 
+    let s = '';
+    s += (num[1]!=0)?(a[Number(num[1])]||b[num[1][0]]+' '+a[num[1][1]])+'Crore ':'';
+    s += (num[2]!=0)?(a[Number(num[2])]||b[num[2][0]]+' '+a[num[2][1]])+'Lakh ':'';
+    s += (num[3]!=0)?(a[Number(num[3])]||b[num[3][0]]+' '+a[num[3][1]])+'Thousand ':'';
+    s += (num[4]!=0)?(a[Number(num[4])]||b[num[4][0]]+' '+a[num[4][1]])+'Hundred ':'';
+    s += (num[5]!=0)?((s!='')?'and ':'')+( a[Number(num[5])]||b[num[5][0]]+' '+a[num[5][1]]):'';
+    return s.trim() + ' Only';
+}
+
+function updateUI() {
+    document.getElementById('dashCoName').textContent = document.getElementById('coName').value || 'Company Name';
+    if (!rows.length) return;
+    document.getElementById('previewIdx').textContent = `${currentPreviewIdx + 1} of ${rows.length}`;
+    document.getElementById('previewArea').innerHTML = buildHTMLPreview(rows[currentPreviewIdx]);
+}
+
+// Visual HTML Preview only (No longer used for PDF generation)
+function buildHTMLPreview(r) {
+    const coName = document.getElementById('coName').value;
+    const coAddr = document.getElementById('coAddr').value;
+    const m = document.getElementById('selM').value, y = document.getElementById('selY').value;
+    const pDateRaw = document.getElementById('pDate').value;
+    const pd = pDateRaw ? pDateRaw.split('-').reverse().join('/') : '—';
+
+    const earns = [
+        {l:'Basic', v:Number(r.Basic||0)}, {l:'House Rent Allowance', v:Number(r.HRA||0)},
+        {l:'Leave Travel Allowance', v:Number(r.LTA||0)}, {l:'Travelling Allowance', v:Number(r.Travelling||0)},
+        {l:'Other Allowance', v:Number(r.Other||0)}, {l:'Bonus', v:Number(r.Bonus||0)}
+    ].filter(x => x.v > 0);
+
+    const deds = [
+        {l:'Professional Tax', v:Number(r.PT||0)}, {l:'Insurance', v:Number(r.Insurance||0)},
+        {l:'Advance', v:Number(r.Advance||0)}, {l:'PF', v:Number(r.PF||0)},
+        {l:'ESIC', v:Number(r.ESIC||0)}, {l:'Income Tax', v:Number(r.IncomeTax||0)}
+    ].filter(x => x.v > 0);
+
+    const gE = earns.reduce((a,b)=>a+b.v,0), tD = deds.reduce((a,b)=>a+b.v,0), net = gE - tD;
+
+    let trs = '';
+    const max = Math.max(earns.length, deds.length);
+    for(let i=0; i<max; i++) {
+        const e = earns[i] || {l:'',v:''}, d = deds[i] || {l:'',v:''};
+        trs += `<tr>
+            <td style="padding:14px 10px; border-bottom:1px dashed #e2e8f0; color:#475569; width:35%;">${e.l}</td>
+            <td style="padding:14px 10px; border-bottom:1px dashed #e2e8f0; text-align:right; font-weight:700; color:#0f172a; width:15%;">${e.v ? '₹'+formatINR(e.v) : ''}</td>
+            <td style="padding:14px 10px 14px 20px; border-bottom:1px dashed #e2e8f0; border-left:1px solid #e2e8f0; color:#475569; width:35%;">${d.l}</td>
+            <td style="padding:14px 10px; border-bottom:1px dashed #e2e8f0; text-align:right; font-weight:700; color:#ef4444; width:15%;">${d.v ? '₹'+formatINR(d.v) : ''}</td>
+        </tr>`;
+    }
+
+    return `<div class="pdf-canvas" style="font-family:'Plus Jakarta Sans',sans-serif; color:#0f172a; background:#fff;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:40px;">
+            <div style="display:flex; align-items:center; gap:20px;">
+                ${logoBase64 ? `<img src="${logoBase64}" style="max-height:55px; max-width:200px; object-fit:contain;">` : `<div style="font-size:24px; font-weight:800; color:#94a3b8;">[LOGO]</div>`}
+                <div><h1 style="font-size:22px; font-weight:800; color:#1e293b; margin:0 0 6px 0;">${coName}</h1><p style="font-size:12px; color:#64748b; margin:0;">${coAddr}</p></div>
+            </div>
+            <div style="text-align:right; padding-top:4px;">
+                <p style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin:0 0 4px 0;">PAYSLIP</p>
+                <p style="font-size:14px; font-weight:800; color:#1e293b; margin:0;">${m} ${y}</p>
+            </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:30px;">
+            <div style="flex:1;">
+                <p style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin:0 0 16px 0;">EMPLOYEE SUMMARY</p>
+                <table style="font-size:12px; color:#64748b; line-height:2;">
+                    <tr><td style="width:120px;">Employee Name</td><td>: <strong style="color:#0f172a;">${r.Name || '—'}</strong></td></tr>
+                    <tr><td>Employee ID</td><td>: <strong style="color:#0f172a;">${r.ID || '—'}</strong></td></tr>
+                    ${r.Designation ? `<tr><td>Designation</td><td>: <strong style="color:#0f172a;">${r.Designation}</strong></td></tr>` : ''}
+                    <tr><td>Pay Period</td><td>: <strong style="color:#0f172a;">${m} ${y}</strong></td></tr>
+                    <tr><td>Pay Date</td><td>: <strong style="color:#0f172a;">${pd}</strong></td></tr>
+                </table>
+            </div>
+            <div style="width:280px; background:#f0fdf4; border:1px solid #dcfce7; border-radius:10px; padding:20px; display:flex; flex-direction:column; justify-content:center;">
+                 <p style="font-size:10px; font-weight:800; color:#16a34a; margin:0 0 8px 0; text-transform:uppercase;">TOTAL NET PAY</p>
+                 <div style="display:flex; align-items:center; justify-content:space-between;">
+                     <div><p style="font-size:11px; color:#64748b; margin:0 0 4px 0;">Paid Days: <strong style="color:#0f172a;">${r.PaidDays || 0}</strong></p><p style="font-size:11px; color:#64748b; margin:0;">LOP Days: <strong style="color:#0f172a;">${r.LOPDays || 0}</strong></p></div>
+                     <p style="font-size:24px; font-weight:800; color:#0f172a; margin:0; letter-spacing:-0.5px;">₹${formatINR(net)}</p>
+                 </div>
+            </div>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:20px;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; padding:12px 10px; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; border-bottom:1px dashed #cbd5e1; border-top:1px solid #f1f5f9;">EARNINGS</th>
+                    <th style="text-align:right; padding:12px 10px; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; border-bottom:1px dashed #cbd5e1; border-top:1px solid #f1f5f9;">AMOUNT</th>
+                    <th style="text-align:left; padding:12px 10px 12px 20px; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; border-bottom:1px dashed #cbd5e1; border-top:1px solid #f1f5f9; border-left:1px solid #e2e8f0;">DEDUCTIONS</th>
+                    <th style="text-align:right; padding:12px 10px; color:#64748b; font-size:10px; font-weight:800; text-transform:uppercase; border-bottom:1px dashed #cbd5e1; border-top:1px solid #f1f5f9;">AMOUNT</th>
+                </tr>
+            </thead>
+            <tbody>${trs}</tbody>
+            <tfoot>
+                <tr style="background:#f8fafc;">
+                    <td style="padding:16px 10px; font-weight:800; color:#0f172a;">Gross Earnings</td>
+                    <td style="padding:16px 10px; text-align:right; font-weight:800; color:#0f172a;">₹${formatINR(gE)}</td>
+                    <td style="padding:16px 10px 16px 20px; border-left:1px solid #e2e8f0; font-weight:800; color:#0f172a;">Total Deductions</td>
+                    <td style="padding:16px 10px; text-align:right; font-weight:800; color:#ef4444;">₹${formatINR(tD)}</td>
+                </tr>
+            </tfoot>
+        </table>
+        <div style="background:#f0fdf4; border:1px solid #dcfce7; border-radius:10px; padding:24px; display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div><p style="font-size:12px; font-weight:800; color:#16a34a; margin:0 0 4px 0; text-transform:uppercase;">TOTAL NET PAYABLE</p><p style="font-size:10px; color:#94a3b8; margin:0;">Gross Earnings - Total Deductions</p></div>
+            <p style="font-size:28px; font-weight:800; color:#0f172a; margin:0; letter-spacing:-0.5px;">₹${formatINR(net)}</p>
+        </div>
+        <p style="text-align:right; font-size:10px; color:#64748b; font-weight:500; margin:0;">Amount In Words : <strong style="color:#0f172a;">Indian Rupee ${numToWords(net)}</strong></p>
+    </div>`;
+}
+
+// -------------------------------------------------------------
+// NEW NATIVE PDF GENERATOR - BULLETPROOF NO CROP BUGS
+// -------------------------------------------------------------
+async function processAll() {
+    if (!rows.length) return alert('Please upload a staff Excel file first.');
+    const zip = new JSZip();
+    const pb = document.getElementById('progressBox');
+    const btn = document.getElementById('mainBtn');
+    
+    const coName = document.getElementById('coName').value;
+    const coAddr = document.getElementById('coAddr').value;
+    const m = document.getElementById('selM').value;
+    const y = document.getElementById('selY').value;
+    const pDateRaw = document.getElementById('pDate').value;
+    const pd = pDateRaw ? pDateRaw.split('-').reverse().join('/') : '—';
+
+    pb.classList.remove('hidden'); 
+    btn.disabled = true;
+    
+    const { jsPDF } = window.jspdf;
+
+    for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        document.getElementById('pText').innerText = `Native PDF Math Generation: ${r.Name}`;
+        document.getElementById('pBar').style.width = `${((i+1)/rows.length)*100}%`;
+
+        // Create PDF instance
+        const doc = new jsPDF({ format: 'a4', unit: 'pt' });
+        let startY = 40;
+
+        // 1. Draw Logo / Header
+        if (logoBase64) {
+            try {
+                const imgProps = doc.getImageProperties(logoBase64);
+                const maxW = 140, maxH = 45;
+                const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
+                doc.addImage(logoBase64, imgProps.fileType, 40, startY, imgProps.width * ratio, imgProps.height * ratio);
+            } catch(e) {
+                // Ignore parsing errors, skip logo if corrupted
+            }
+            doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+            doc.text(coName, 200, startY + 18);
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+            doc.text(coAddr, 200, startY + 32);
+        } else {
+            doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+            doc.text(coName, 40, startY + 18);
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+            doc.text(coAddr, 40, startY + 32);
+        }
+
+        // Payslip Top Right
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(148, 163, 184);
+        doc.text("PAYSLIP", 555, startY + 12, { align: 'right' });
+        doc.setFontSize(12); doc.setTextColor(30, 41, 59);
+        doc.text(`${m} ${y}`, 555, startY + 28, { align: 'right' });
+
+        startY += 70;
+
+        // 2. Employee Summary
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(148, 163, 184);
+        doc.text("EMPLOYEE SUMMARY", 40, startY);
+        
+        let empY = startY + 15;
+        doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+        const drawEmpLine = (lbl, val) => {
+            doc.setTextColor(100, 116, 139); doc.text(lbl, 40, empY);
+            doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.text(`:  ${val}`, 130, empY);
+            doc.setFont('helvetica', 'normal'); empY += 15;
+        };
+        drawEmpLine("Employee Name", r.Name || '—');
+        drawEmpLine("Employee ID", r.ID || '—');
+        if(r.Designation) drawEmpLine("Designation", r.Designation);
+        drawEmpLine("Pay Period", `${m} ${y}`);
+        drawEmpLine("Pay Date", pd);
+
+        // 3. Total Net Pay Box (Top Right)
+        const earns = [{l:'Basic',v:Number(r.Basic||0)},{l:'House Rent Allowance',v:Number(r.HRA||0)},{l:'Leave Travel Allowance',v:Number(r.LTA||0)},{l:'Travelling Allowance',v:Number(r.Travelling||0)},{l:'Other Allowance',v:Number(r.Other||0)},{l:'Bonus',v:Number(r.Bonus||0)}].filter(x=>x.v>0);
+        const deds = [{l:'Professional Tax',v:Number(r.PT||0)},{l:'Insurance',v:Number(r.Insurance||0)},{l:'Advance',v:Number(r.Advance||0)},{l:'PF',v:Number(r.PF||0)},{l:'ESIC',v:Number(r.ESIC||0)},{l:'Income Tax',v:Number(r.IncomeTax||0)}].filter(x=>x.v>0);
+        const gE = earns.reduce((a,b)=>a+b.v,0), tD = deds.reduce((a,b)=>a+b.v,0), net = gE - tD;
+
+        doc.setDrawColor(220, 252, 231); doc.setFillColor(240, 253, 244);
+        doc.roundedRect(320, startY - 10, 235, 75, 6, 6, 'FD');
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
+        doc.text("TOTAL NET PAY", 335, startY + 5);
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+        doc.text(`Paid Days:`, 335, startY + 25); doc.setFont('helvetica','bold'); doc.setTextColor(30,41,59); doc.text(`${r.PaidDays||0}`, 380, startY + 25);
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+        doc.text(`LOP Days:`, 335, startY + 40); doc.setFont('helvetica','bold'); doc.setTextColor(30,41,59); doc.text(`${r.LOPDays||0}`, 380, startY + 40);
+        doc.setFontSize(18); doc.text(`Rs. ${formatINR(net)}`, 540, startY + 35, { align: 'right' });
+
+        startY = empY + 20;
+
+        // 4. Data Table (Zero Values Removed)
+        let tData = [];
+        const mx = Math.max(earns.length, deds.length);
+        for(let j=0; j<mx; j++) {
+            tData.push([
+                earns[j] ? earns[j].l : '', earns[j] ? `Rs. ${formatINR(earns[j].v)}` : '',
+                deds[j] ? deds[j].l : '', deds[j] ? `Rs. ${formatINR(deds[j].v)}` : ''
+            ]);
+        }
+
+        doc.autoTable({
+            startY: startY,
+            head: [['EARNINGS', 'AMOUNT', 'DEDUCTIONS', 'AMOUNT']],
+            body: tData,
+            theme: 'grid',
+            headStyles: { fillColor: [248, 250, 252], textColor: [100, 116, 139], fontSize: 8, fontStyle: 'bold' },
+            columnStyles: { 0: { cellWidth: 165 }, 1: { cellWidth: 90, halign: 'right', fontStyle: 'bold', textColor: [15, 23, 42] }, 2: { cellWidth: 165 }, 3: { cellWidth: 95, halign: 'right', fontStyle: 'bold', textColor: [239, 68, 68] } },
+            styles: { fontSize: 9, cellPadding: 10, lineColor: [226, 232, 240], textColor: [71, 85, 105] },
+            foot: [['Gross Earnings', `Rs. ${formatINR(gE)}`, 'Total Deductions', `Rs. ${formatINR(tD)}`]],
+            footStyles: { fillColor: [248, 250, 252], textColor: [15, 23, 42], fontStyle: 'bold' }
+        });
+
+        // 5. Final Footer Box
+        let finalY = doc.lastAutoTable.finalY + 30;
+        doc.setDrawColor(220, 252, 231); doc.setFillColor(240, 253, 244);
+        doc.roundedRect(40, finalY, 515, 60, 6, 6, 'FD');
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
+        doc.text("TOTAL NET PAYABLE", 55, finalY + 25);
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+        doc.text("Gross Earnings - Total Deductions", 55, finalY + 40);
+        doc.setFontSize(22); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+        doc.text(`Rs. ${formatINR(net)}`, 540, finalY + 35, { align: 'right' });
+        
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
+        doc.text(`Amount In Words: Indian Rupee ${numToWords(net)}`, 555, finalY + 80, { align: 'right' });
+
+        // Buffer ZIP output
+        const pdfBlob = doc.output('blob');
+        zip.file(`${r.Name.replace(/\s+/g, '_')}_Payslip.pdf`, pdfBlob);
+        
+        // Let UI breathe
+        if (i % 5 === 0) await new Promise(res => setTimeout(res, 20)); 
+    }
+
+    const content = await zip.generateAsync({type: "blob"});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(content);
+    link.download = `Lunamo_Payslips_${m}_${y}.zip`;
+    link.click();
+    
+    pb.classList.add('hidden'); 
+    btn.disabled = false;
+}
+
+function downloadTemplate() {
+    const headers = [['Name','ID','Designation','PaidDays','LOPDays','Basic','HRA','LTA','Travelling','Other','Bonus','PT','Insurance','Advance','PF','ESIC','IncomeTax']];
+    const sample = [['krishna','EMP- 01','Manager',23,7,193701,5126,2663,5215,5163,2123,200,62,1000,262,0,2514]];
+    const ws = XLSX.utils.aoa_to_sheet([...headers, ...sample]);
+    const wb = XLSX.utils.book_new(); 
+    XLSX.utils.book_append_sheet(wb, ws, "Payroll");
+    XLSX.writeFile(wb, "Staff_Upload_Template.xlsx");
+}
+</script>
+</body>
+</html>
