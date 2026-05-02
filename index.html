@@ -2,11 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Payroll Dashboard — Lunamo Café</title>
+    <title>Payroll Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- REPLACED html2pdf WITH NATIVE jsPDF LIBRARIES -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -14,10 +13,11 @@
         * { box-sizing: border-box; }
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: #eef2f7; min-height: 100vh; margin: 0; }
         
-        .upload-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s; }
+        .upload-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s ease; }
         .upload-zone:hover { border-color: #6366f1; background: #eef2ff; }
+        .upload-zone.drag-over { border-color: #4f46e5; background: #e0e7ff; border-style: solid; transform: scale(1.02); }
         
-        .ctrl-input { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600; font-size: 13px; outline: none; }
+        .ctrl-input { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: 600; font-size: 13px; outline: none; transition: border-color 0.2s; }
         .ctrl-input:focus { border-color: #6366f1; background: #fff; }
         .ctrl-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
         
@@ -31,11 +31,11 @@
     <!-- Header -->
     <div class="bg-slate-800 text-white rounded-2xl px-8 py-6 mb-8 flex justify-between items-center shadow-lg">
         <div>
-            <h1 id="dashCoName" class="text-xl font-bold">Lunamo Café Private Limited</h1>
+            <h1 id="dashCoName" class="text-xl font-bold">Company Name</h1>
             <p class="text-slate-400 text-sm mt-1">Payroll Dashboard</p>
         </div>
         <button onclick="downloadTemplate()" class="bg-slate-700 hover:bg-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-colors">
-            📥 Download Excel Template
+            📥 Download Dynamic Excel Template
         </button>
     </div>
 
@@ -47,18 +47,18 @@
                 <h3 class="font-bold text-slate-800 text-sm mb-2 uppercase tracking-wide">1. Company Details</h3>
                 <div>
                     <label class="ctrl-label">Company Name</label>
-                    <input type="text" id="coName" value="Lunamo Café Private Limited" oninput="updateUI()" class="ctrl-input">
+                    <input type="text" id="coName" value="" placeholder="Enter Company Name" oninput="updateUI()" class="ctrl-input">
                 </div>
                 <div>
                     <label class="ctrl-label">Address Line</label>
-                    <input type="text" id="coAddr" value="32D, Sarat Bose Road, AJC Bose Road, Kolkata 700020 India" oninput="updateUI()" class="ctrl-input">
+                    <input type="text" id="coAddr" value="" placeholder="Enter Complete Address" oninput="updateUI()" class="ctrl-input">
                 </div>
                 <div>
                     <label class="ctrl-label">Company Logo</label>
-                    <div class="upload-zone" onclick="document.getElementById('logoInput').click()">
+                    <div id="logoZone" class="upload-zone" onclick="document.getElementById('logoInput').click()">
                         <input type="file" id="logoInput" accept="image/*" onchange="loadLogo(event)" style="display:none">
                         <img id="logoThumb" src="" style="max-height:40px; margin:auto; display:none;">
-                        <p id="logoText" class="text-xs font-semibold text-slate-400 mt-2">Click to upload logo</p>
+                        <p id="logoText" class="text-xs font-semibold text-slate-400 mt-2">Drop your Logo here or click</p>
                     </div>
                 </div>
             </div>
@@ -88,10 +88,10 @@
 
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
                 <h3 class="font-bold text-slate-800 text-sm mb-2 uppercase tracking-wide">3. Staff Data</h3>
-                <div class="upload-zone border-indigo-200 bg-indigo-50" onclick="document.getElementById('exUp').click()">
+                <div id="xlZone" class="upload-zone border-indigo-200 bg-indigo-50" onclick="document.getElementById('exUp').click()">
                     <input type="file" id="exUp" accept=".xlsx,.xls" onchange="loadData(event)" style="display:none">
-                    <p id="xlLabel" class="text-sm font-bold text-indigo-600">📄 Upload Staff Excel</p>
-                    <p id="empCount" class="text-xs text-indigo-400 mt-1">Supports up to 100 employees</p>
+                    <p id="xlLabel" class="text-sm font-bold text-indigo-600">📄 Drop your Staff Excel here or click</p>
+                    <p id="empCount" class="text-xs text-indigo-400 mt-1">Supports unlimited dynamic columns</p>
                 </div>
             </div>
 
@@ -131,36 +131,94 @@
 </div>
 
 <script>
-// Init Year Dropdown
-const ys = document.getElementById('selY'), cy = new Date().getFullYear();
-for(let i = 2024; i <= 2030; i++){ 
+// Endless Year
+const ys = document.getElementById('selY');
+const cy = new Date().getFullYear();
+for(let i = 2024; i <= cy + 100; i++){ 
     const o = document.createElement('option'); o.value = i; o.text = i; 
     if(i === cy) o.selected = true; ys.appendChild(o); 
 }
 
 let rows = [], logoBase64 = '', currentPreviewIdx = 0;
 
-function loadLogo(e) {
-    const file = e.target.files[0];
-    if(!file) return;
+function toTitleCase(str) {
+    if (!str) return '';
+    return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
+// Drag & Drop Setup
+const setupDragAndDrop = (zoneId, handleFileCallback) => {
+    const zone = document.getElementById(zoneId);
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', (e) => { e.preventDefault(); zone.classList.remove('drag-over'); });
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault(); zone.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) handleFileCallback(e.dataTransfer.files[0]);
+    });
+};
+
+function handleLogoFile(file) {
+    if(!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = evt => {
         logoBase64 = evt.target.result;
-        const img = document.getElementById('logoThumb');
-        img.src = logoBase64; img.style.display = 'block';
+        document.getElementById('logoThumb').src = logoBase64; 
+        document.getElementById('logoThumb').style.display = 'block';
         document.getElementById('logoText').textContent = 'Logo Uploaded ✓';
         updateUI();
     };
     reader.readAsDataURL(file);
 }
 
-function loadData(e) {
-    const file = e.target.files[0];
+// ---> DYNAMIC EXCEL PARSER <---
+function handleExcelFile(file) {
     if(!file) return;
     const reader = new FileReader();
     reader.onload = evt => {
         const wb = XLSX.read(new Uint8Array(evt.target.result), {type:'array'});
-        rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        // Read as Array of Arrays to process the 2-row header layout
+        const rawData = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1});
+        
+        if (rawData.length < 2) return alert("Invalid template. Please download and use the provided template format.");
+
+        let currentCategory = 'INFO';
+        const colMap = [];
+        
+        // Step 1: Map the columns dynamically based on the top header row
+        for (let i = 0; i < rawData[1].length; i++) {
+            let topHeader = rawData[0][i] ? String(rawData[0][i]).toUpperCase().trim() : '';
+            if (topHeader.includes('EARN')) currentCategory = 'EARNINGS';
+            else if (topHeader.includes('DEDUCT')) currentCategory = 'DEDUCTIONS';
+            else if (topHeader) currentCategory = 'INFO';
+            
+            // Push column mapping logic
+            colMap.push({ index: i, type: currentCategory, name: rawData[1][i] });
+        }
+
+        // Step 2: Extract each employee row dynamically
+        rows = [];
+        for (let r = 2; r < rawData.length; r++) {
+            const rowData = rawData[r];
+            if (!rowData || !rowData.length) continue; 
+            
+            const emp = { info: {}, earns: [], deds: [] };
+            colMap.forEach(col => {
+                const val = rowData[col.index];
+                if (val === undefined || val === null || val === '') return;
+                
+                if (col.type === 'EARNINGS') {
+                    if (Number(val) > 0) emp.earns.push({ l: col.name, v: Math.round(Number(val)) });
+                } else if (col.type === 'DEDUCTIONS') {
+                    if (Number(val) > 0) emp.deds.push({ l: col.name, v: Math.round(Number(val)) });
+                } else {
+                    emp.info[col.name] = val;
+                }
+            });
+            
+            // Only add row if Employee Name exists
+            if (emp.info['Name']) rows.push(emp);
+        }
+
         document.getElementById('xlLabel').textContent = "✓ " + file.name;
         document.getElementById('empCount').textContent = `${rows.length} employees found`;
         document.getElementById('previewNav').classList.remove('hidden');
@@ -170,11 +228,17 @@ function loadData(e) {
     reader.readAsArrayBuffer(file);
 }
 
+function loadLogo(e) { handleLogoFile(e.target.files[0]); }
+function loadData(e) { handleExcelFile(e.target.files[0]); }
+
+setupDragAndDrop('logoZone', handleLogoFile);
+setupDragAndDrop('xlZone', handleExcelFile);
+
 function prevEmp() { if(currentPreviewIdx > 0) { currentPreviewIdx--; updateUI(); } }
 function nextEmp() { if(currentPreviewIdx < rows.length - 1) { currentPreviewIdx++; updateUI(); } }
 
 function formatINR(num) {
-    return Number(num).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Math.round(Number(num)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function numToWords(n) {
@@ -198,26 +262,16 @@ function updateUI() {
     document.getElementById('previewArea').innerHTML = buildHTMLPreview(rows[currentPreviewIdx]);
 }
 
-// Visual HTML Preview only (No longer used for PDF generation)
 function buildHTMLPreview(r) {
-    const coName = document.getElementById('coName').value;
-    const coAddr = document.getElementById('coAddr').value;
+    const coName = document.getElementById('coName').value || 'Your Company Name';
+    const coAddr = document.getElementById('coAddr').value || 'Your Company Address';
     const m = document.getElementById('selM').value, y = document.getElementById('selY').value;
     const pDateRaw = document.getElementById('pDate').value;
     const pd = pDateRaw ? pDateRaw.split('-').reverse().join('/') : '—';
 
-    const earns = [
-        {l:'Basic', v:Number(r.Basic||0)}, {l:'House Rent Allowance', v:Number(r.HRA||0)},
-        {l:'Leave Travel Allowance', v:Number(r.LTA||0)}, {l:'Travelling Allowance', v:Number(r.Travelling||0)},
-        {l:'Other Allowance', v:Number(r.Other||0)}, {l:'Bonus', v:Number(r.Bonus||0)}
-    ].filter(x => x.v > 0);
-
-    const deds = [
-        {l:'Professional Tax', v:Number(r.PT||0)}, {l:'Insurance', v:Number(r.Insurance||0)},
-        {l:'Advance', v:Number(r.Advance||0)}, {l:'PF', v:Number(r.PF||0)},
-        {l:'ESIC', v:Number(r.ESIC||0)}, {l:'Income Tax', v:Number(r.IncomeTax||0)}
-    ].filter(x => x.v > 0);
-
+    // Data dynamically pulled from parsed objects
+    const earns = r.earns || [];
+    const deds = r.deds || [];
     const gE = earns.reduce((a,b)=>a+b.v,0), tD = deds.reduce((a,b)=>a+b.v,0), net = gE - tD;
 
     let trs = '';
@@ -247,9 +301,9 @@ function buildHTMLPreview(r) {
             <div style="flex:1;">
                 <p style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin:0 0 16px 0;">EMPLOYEE SUMMARY</p>
                 <table style="font-size:12px; color:#64748b; line-height:2;">
-                    <tr><td style="width:120px;">Employee Name</td><td>: <strong style="color:#0f172a;">${r.Name || '—'}</strong></td></tr>
-                    <tr><td>Employee ID</td><td>: <strong style="color:#0f172a;">${r.ID || '—'}</strong></td></tr>
-                    ${r.Designation ? `<tr><td>Designation</td><td>: <strong style="color:#0f172a;">${r.Designation}</strong></td></tr>` : ''}
+                    <tr><td style="width:120px;">Employee Name</td><td>: <strong style="color:#0f172a;">${toTitleCase(r.info['Name'] || '—')}</strong></td></tr>
+                    <tr><td>Employee ID</td><td>: <strong style="color:#0f172a;">${r.info['ID'] || '—'}</strong></td></tr>
+                    ${r.info['Designation'] ? `<tr><td>Designation</td><td>: <strong style="color:#0f172a;">${toTitleCase(r.info['Designation'])}</strong></td></tr>` : ''}
                     <tr><td>Pay Period</td><td>: <strong style="color:#0f172a;">${m} ${y}</strong></td></tr>
                     <tr><td>Pay Date</td><td>: <strong style="color:#0f172a;">${pd}</strong></td></tr>
                 </table>
@@ -257,7 +311,7 @@ function buildHTMLPreview(r) {
             <div style="width:280px; background:#f0fdf4; border:1px solid #dcfce7; border-radius:10px; padding:20px; display:flex; flex-direction:column; justify-content:center;">
                  <p style="font-size:10px; font-weight:800; color:#16a34a; margin:0 0 8px 0; text-transform:uppercase;">TOTAL NET PAY</p>
                  <div style="display:flex; align-items:center; justify-content:space-between;">
-                     <div><p style="font-size:11px; color:#64748b; margin:0 0 4px 0;">Paid Days: <strong style="color:#0f172a;">${r.PaidDays || 0}</strong></p><p style="font-size:11px; color:#64748b; margin:0;">LOP Days: <strong style="color:#0f172a;">${r.LOPDays || 0}</strong></p></div>
+                     <div><p style="font-size:11px; color:#64748b; margin:0 0 4px 0;">Paid Days: <strong style="color:#0f172a;">${r.info['PaidDays'] || 0}</strong></p><p style="font-size:11px; color:#64748b; margin:0;">LOP Days: <strong style="color:#0f172a;">${r.info['LOPDays'] || 0}</strong></p></div>
                      <p style="font-size:24px; font-weight:800; color:#0f172a; margin:0; letter-spacing:-0.5px;">₹${formatINR(net)}</p>
                  </div>
             </div>
@@ -289,17 +343,14 @@ function buildHTMLPreview(r) {
     </div>`;
 }
 
-// -------------------------------------------------------------
-// NEW NATIVE PDF GENERATOR - BULLETPROOF NO CROP BUGS
-// -------------------------------------------------------------
 async function processAll() {
     if (!rows.length) return alert('Please upload a staff Excel file first.');
     const zip = new JSZip();
     const pb = document.getElementById('progressBox');
     const btn = document.getElementById('mainBtn');
     
-    const coName = document.getElementById('coName').value;
-    const coAddr = document.getElementById('coAddr').value;
+    const coName = document.getElementById('coName').value || 'Your Company Name';
+    const coAddr = document.getElementById('coAddr').value || 'Your Company Address';
     const m = document.getElementById('selM').value;
     const y = document.getElementById('selY').value;
     const pDateRaw = document.getElementById('pDate').value;
@@ -312,23 +363,23 @@ async function processAll() {
 
     for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        document.getElementById('pText').innerText = `Native PDF Math Generation: ${r.Name}`;
+        
+        const employeeNameTitleCase = toTitleCase((r.info['Name'] || 'Employee').trim());
+        const employeeDesignationTitleCase = r.info['Designation'] ? toTitleCase(String(r.info['Designation']).trim()) : '';
+
+        document.getElementById('pText').innerText = `Generating PDF: ${employeeNameTitleCase}`;
         document.getElementById('pBar').style.width = `${((i+1)/rows.length)*100}%`;
 
-        // Create PDF instance
         const doc = new jsPDF({ format: 'a4', unit: 'pt' });
         let startY = 40;
 
-        // 1. Draw Logo / Header
         if (logoBase64) {
             try {
                 const imgProps = doc.getImageProperties(logoBase64);
                 const maxW = 140, maxH = 45;
                 const ratio = Math.min(maxW / imgProps.width, maxH / imgProps.height);
                 doc.addImage(logoBase64, imgProps.fileType, 40, startY, imgProps.width * ratio, imgProps.height * ratio);
-            } catch(e) {
-                // Ignore parsing errors, skip logo if corrupted
-            }
+            } catch(e) {}
             doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
             doc.text(coName, 200, startY + 18);
             doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
@@ -340,7 +391,6 @@ async function processAll() {
             doc.text(coAddr, 40, startY + 32);
         }
 
-        // Payslip Top Right
         doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(148, 163, 184);
         doc.text("PAYSLIP", 555, startY + 12, { align: 'right' });
         doc.setFontSize(12); doc.setTextColor(30, 41, 59);
@@ -348,7 +398,6 @@ async function processAll() {
 
         startY += 70;
 
-        // 2. Employee Summary
         doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(148, 163, 184);
         doc.text("EMPLOYEE SUMMARY", 40, startY);
         
@@ -359,15 +408,15 @@ async function processAll() {
             doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.text(`:  ${val}`, 130, empY);
             doc.setFont('helvetica', 'normal'); empY += 15;
         };
-        drawEmpLine("Employee Name", r.Name || '—');
-        drawEmpLine("Employee ID", r.ID || '—');
-        if(r.Designation) drawEmpLine("Designation", r.Designation);
+        
+        drawEmpLine("Employee Name", employeeNameTitleCase);
+        drawEmpLine("Employee ID", r.info['ID'] || '—');
+        if(employeeDesignationTitleCase) drawEmpLine("Designation", employeeDesignationTitleCase);
         drawEmpLine("Pay Period", `${m} ${y}`);
         drawEmpLine("Pay Date", pd);
 
-        // 3. Total Net Pay Box (Top Right)
-        const earns = [{l:'Basic',v:Number(r.Basic||0)},{l:'House Rent Allowance',v:Number(r.HRA||0)},{l:'Leave Travel Allowance',v:Number(r.LTA||0)},{l:'Travelling Allowance',v:Number(r.Travelling||0)},{l:'Other Allowance',v:Number(r.Other||0)},{l:'Bonus',v:Number(r.Bonus||0)}].filter(x=>x.v>0);
-        const deds = [{l:'Professional Tax',v:Number(r.PT||0)},{l:'Insurance',v:Number(r.Insurance||0)},{l:'Advance',v:Number(r.Advance||0)},{l:'PF',v:Number(r.PF||0)},{l:'ESIC',v:Number(r.ESIC||0)},{l:'Income Tax',v:Number(r.IncomeTax||0)}].filter(x=>x.v>0);
+        const earns = r.earns || [];
+        const deds = r.deds || [];
         const gE = earns.reduce((a,b)=>a+b.v,0), tD = deds.reduce((a,b)=>a+b.v,0), net = gE - tD;
 
         doc.setDrawColor(220, 252, 231); doc.setFillColor(240, 253, 244);
@@ -375,14 +424,13 @@ async function processAll() {
         doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(22, 163, 74);
         doc.text("TOTAL NET PAY", 335, startY + 5);
         doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-        doc.text(`Paid Days:`, 335, startY + 25); doc.setFont('helvetica','bold'); doc.setTextColor(30,41,59); doc.text(`${r.PaidDays||0}`, 380, startY + 25);
+        doc.text(`Paid Days:`, 335, startY + 25); doc.setFont('helvetica','bold'); doc.setTextColor(30,41,59); doc.text(`${r.info['PaidDays']||0}`, 380, startY + 25);
         doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
-        doc.text(`LOP Days:`, 335, startY + 40); doc.setFont('helvetica','bold'); doc.setTextColor(30,41,59); doc.text(`${r.LOPDays||0}`, 380, startY + 40);
+        doc.text(`LOP Days:`, 335, startY + 40); doc.setFont('helvetica','bold'); doc.setTextColor(30,41,59); doc.text(`${r.info['LOPDays']||0}`, 380, startY + 40);
         doc.setFontSize(18); doc.text(`Rs. ${formatINR(net)}`, 540, startY + 35, { align: 'right' });
 
         startY = empY + 20;
 
-        // 4. Data Table (Zero Values Removed)
         let tData = [];
         const mx = Math.max(earns.length, deds.length);
         for(let j=0; j<mx; j++) {
@@ -404,7 +452,6 @@ async function processAll() {
             footStyles: { fillColor: [248, 250, 252], textColor: [15, 23, 42], fontStyle: 'bold' }
         });
 
-        // 5. Final Footer Box
         let finalY = doc.lastAutoTable.finalY + 30;
         doc.setDrawColor(220, 252, 231); doc.setFillColor(240, 253, 244);
         doc.roundedRect(40, finalY, 515, 60, 6, 6, 'FD');
@@ -418,31 +465,49 @@ async function processAll() {
         doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139);
         doc.text(`Amount In Words: Indian Rupee ${numToWords(net)}`, 555, finalY + 80, { align: 'right' });
 
-        // Buffer ZIP output
         const pdfBlob = doc.output('blob');
-        zip.file(`${r.Name.replace(/\s+/g, '_')}_Payslip.pdf`, pdfBlob);
+        zip.file(`${employeeNameTitleCase} Pay Slip ${m} ${y}.pdf`, pdfBlob);
         
-        // Let UI breathe
         if (i % 5 === 0) await new Promise(res => setTimeout(res, 20)); 
     }
 
     const content = await zip.generateAsync({type: "blob"});
     const link = document.createElement('a');
     link.href = URL.createObjectURL(content);
-    link.download = `Lunamo_Payslips_${m}_${y}.zip`;
+    
+    const zipPrefix = (document.getElementById('coName').value || 'Payroll').replace(/\s+/g, '_');
+    link.download = `${zipPrefix}_Payslips_${m}_${y}.zip`;
     link.click();
     
     pb.classList.add('hidden'); 
     btn.disabled = false;
 }
 
+// ---> DYNAMIC EXCEL TEMPLATE GENERATOR <---
 function downloadTemplate() {
-    const headers = [['Name','ID','Designation','PaidDays','LOPDays','Basic','HRA','LTA','Travelling','Other','Bonus','PT','Insurance','Advance','PF','ESIC','IncomeTax']];
-    const sample = [['krishna','EMP- 01','Manager',23,7,193701,5126,2663,5215,5163,2123,200,62,1000,262,0,2514]];
-    const ws = XLSX.utils.aoa_to_sheet([...headers, ...sample]);
+    // Row 0 acts as the Master Category Header. Blank strings inherit the last category.
+    const row0 = ['INFO', '', '', '', '', 'EARNINGS', '', '', '', 'DEDUCTIONS', '', ''];
+    // Row 1 acts as the specific column name.
+    const row1 = ['Name', 'ID', 'Designation', 'PaidDays', 'LOPDays', 'Basic Salary', 'HRA', 'Travel Allowance', 'Bonus', 'PF', 'Professional Tax', 'Income Tax'];
+    
+    const randomBasic = Math.floor(Math.random() * (80000 - 30000 + 1)) + 30000;
+    const row2 = ['Example Employee', 'EMP-1234', 'Manager', 22, 1, randomBasic, Math.floor(randomBasic*0.4), 2000, 500, Math.floor(randomBasic*0.12), 200, 1500];
+    
+    const ws = XLSX.utils.aoa_to_sheet([row0, row1, row2]);
+    
+    // Add visual merges to the top row to make it clear for the user
+    ws['!merges'] = [
+        { s: {r:0, c:0}, e: {r:0, c:4} }, // INFO spans cols 0-4
+        { s: {r:0, c:5}, e: {r:0, c:8} }, // EARNINGS spans cols 5-8
+        { s: {r:0, c:9}, e: {r:0, c:11} } // DEDUCTIONS spans cols 9-11
+    ];
+    
+    // Auto width adjustments
+    ws['!cols'] = row1.map(h => ({ wch: Math.max(h.length + 5, 12) }));
+
     const wb = XLSX.utils.book_new(); 
     XLSX.utils.book_append_sheet(wb, ws, "Payroll");
-    XLSX.writeFile(wb, "Staff_Upload_Template.xlsx");
+    XLSX.writeFile(wb, "Dynamic_Staff_Template.xlsx");
 }
 </script>
 </body>
